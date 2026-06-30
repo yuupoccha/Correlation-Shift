@@ -36,7 +36,6 @@
     .game-title {
       color: #fff;
       font-size: 32px;
-      font-style: italic;
       font-weight: 900;
       letter-spacing: 4px;
       margin-bottom: 5px;
@@ -458,14 +457,14 @@
             if (totalError <= maxError) {
                 ctx.fillStyle = '#00ffcc';
                 ctx.font = 'bold 42px "Helvetica Neue", Arial, sans-serif';
-                ctx.fillText("🏆 クリア 🏆", cx, cy - 30);
+                ctx.fillText("🏆 CLEAR !! 🏆", cx, cy - 30);
                 ctx.fillStyle = '#ffffff';
                 ctx.font = 'bold 24px "Helvetica Neue", Arial, sans-serif';
                 ctx.fillText(`累計誤差: ${totalError.toFixed(3)} ≤ ${maxError.toFixed(3)}`, cx, cy + 30);
             } else {
                 ctx.fillStyle = '#ff4444';
                 ctx.font = 'bold 42px "Helvetica Neue", Arial, sans-serif';
-                ctx.fillText("❌ ざんねん ❌", cx, cy - 30);
+                ctx.fillText("❌ GAME OVER... ❌", cx, cy - 30);
                 ctx.fillStyle = '#ffffff';
                 ctx.font = 'bold 24px "Helvetica Neue", Arial, sans-serif';
                 ctx.fillText(`累計誤差: ${totalError.toFixed(3)} > ${maxError.toFixed(3)}`, cx, cy + 30);
