@@ -128,6 +128,7 @@
     let totalError = 0;
     let currentResultR = 0;
     let currentError = 0;
+    let roundHistory = []; // 3回分のデータを記録する配列
     
     let difficulty = 'NORMAL';
     let maxError = 0.300;
@@ -154,6 +155,7 @@
         gameArea.classList.remove('hidden');
         currentRound = 1;
         totalError = 0;
+        roundHistory = []; // 履歴のリセット
         initRound();
     }
     
@@ -254,7 +256,6 @@
         return num / Math.sqrt(denX * denY);
     }
     
-    // --- ドラッグ・タッチ操作 ---
     function handleDragStart(x, y) {
         if(gameState !== 'playing') return;
         isDragging = true;
@@ -288,6 +289,14 @@
             currentResultR = calculateCorrelation(proj);
             currentError = Math.abs(currentResultR - targetR);
             totalError += currentError;
+            
+            // 今回のラウンドの結果を履歴に保存
+            roundHistory.push({
+                round: currentRound,
+                target: targetR,
+                result: currentResultR,
+                error: currentError
+            });
             
             actionBtn.classList.add('hidden');
             btnNext.classList.remove('hidden');
@@ -358,7 +367,7 @@
                 ctx.fillText(a.id, cx + x3 * 1.15, cy - y3 * 1.15);
             });
             
-        } else {
+        } else if (gameState === 'result') {
             ctx.strokeStyle = 'rgba(255,255,255,0.1)';
             ctx.lineWidth = 1;
             for(let i = 0; i <= canvas.width; i += 40) {
@@ -412,7 +421,7 @@
                 ctx.fill();
                 ctx.shadowBlur = 0; 
             });
-        } else {
+        } else if (gameState === 'result') {
             proj.forEach(p => {
                 ctx.beginPath();
                 ctx.arc(cx + p.x, cy - p.y, 4.5, 0, Math.PI * 2);
@@ -424,13 +433,16 @@
             });
         }
         
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 18px "Helvetica Neue", Arial, sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(`ROUND ${currentRound} / 3`, 15, 30);
-        
-        ctx.textAlign = 'right';
-        ctx.fillText(`TOTAL ERROR: ${totalError.toFixed(3)} / ${maxError.toFixed(3)}`, canvas.width - 15, 30);
+        // UIテキスト（共通）
+        if (gameState !== 'gameover') {
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 18px "Helvetica Neue", Arial, sans-serif';
+            ctx.textAlign = 'left';
+            ctx.fillText(`ROUND ${currentRound} / 3`, 15, 30);
+            
+            ctx.textAlign = 'right';
+            ctx.fillText(`TOTAL ERROR: ${totalError.toFixed(3)} / ${maxError.toFixed(3)}`, canvas.width - 15, 30);
+        }
         
         if (gameState === 'playing') {
             ctx.fillStyle = '#ffcc00';
@@ -450,25 +462,56 @@
             ctx.font = 'bold 24px "Helvetica Neue", Arial, sans-serif';
             ctx.fillText(`ERROR: ${currentError.toFixed(3)}`, cx, 110);
         } else if (gameState === 'gameover') {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+            // 背景を暗く
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
+            // リザルトタイトル
             ctx.textAlign = 'center';
             if (totalError <= maxError) {
                 ctx.fillStyle = '#00ffcc';
-                ctx.font = 'bold 42px "Helvetica Neue", Arial, sans-serif';
-                ctx.fillText("🏆 CLEAR !! 🏆", cx, cy - 30);
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 24px "Helvetica Neue", Arial, sans-serif';
-                ctx.fillText(`累計誤差: ${totalError.toFixed(3)} ≤ ${maxError.toFixed(3)}`, cx, cy + 30);
+                ctx.font = 'bold 38px "Helvetica Neue", Arial, sans-serif';
+                ctx.fillText("🏆 CLEAR !! 🏆", cx, cy - 140);
             } else {
                 ctx.fillStyle = '#ff4444';
-                ctx.font = 'bold 42px "Helvetica Neue", Arial, sans-serif';
-                ctx.fillText("❌ GAME OVER... ❌", cx, cy - 30);
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 24px "Helvetica Neue", Arial, sans-serif';
-                ctx.fillText(`累計誤差: ${totalError.toFixed(3)} > ${maxError.toFixed(3)}`, cx, cy + 30);
+                ctx.font = 'bold 38px "Helvetica Neue", Arial, sans-serif';
+                ctx.fillText("❌ GAME OVER... ❌", cx, cy - 140);
             }
+            
+            // 累計スコア
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 18px "Helvetica Neue", Arial, sans-serif';
+            ctx.fillText(`最終累計誤差: ${totalError.toFixed(3)} / 許容: ${maxError.toFixed(3)}`, cx, cy - 90);
+            
+            // 履歴テーブルの区切り線
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(cx - 180, cy - 70); ctx.lineTo(cx + 180, cy - 70); ctx.stroke();
+            
+            // 履歴テーブルヘッダー
+            ctx.fillStyle = '#888888';
+            ctx.font = 'bold 13px "Helvetica Neue", Arial, sans-serif';
+            ctx.textAlign = 'left';   ctx.fillText("ROUND", cx - 170, cy - 45);
+            ctx.textAlign = 'center'; ctx.fillText("TARGET", cx - 55, cy - 45);
+                                      ctx.fillText("RESULT", cx + 35, cy - 45);
+                                      ctx.fillText("ERROR", cx + 125, cy - 45);
+            
+            // 各ラウンドのデータ（数値を綺麗に並べるため等幅フォントを使用）
+            ctx.font = 'bold 15px "Courier New", Courier, monospace';
+            roundHistory.forEach((h, idx) => {
+                let yOffset = cy - 5 + idx * 35;
+                
+                // ラウンド名
+                ctx.fillStyle = '#ffffff';
+                ctx.textAlign = 'left';
+                ctx.fillText(` Rd ${h.round}`, cx - 170, yOffset);
+                
+                // 各種数値
+                ctx.textAlign = 'center';
+                ctx.fillStyle = '#ffcc00'; ctx.fillText(h.target.toFixed(3), cx - 55, yOffset);
+                ctx.fillStyle = '#00d5ff'; ctx.fillText(h.result.toFixed(3), cx + 35, yOffset);
+                ctx.fillStyle = '#ff6666'; ctx.fillText(h.error.toFixed(3), cx + 125, yOffset);
+            });
         }
     }
     
