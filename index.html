@@ -128,7 +128,7 @@
     let totalError = 0;
     let currentResultR = 0;
     let currentError = 0;
-    let roundHistory = []; // 3回分のデータを記録する配列
+    let roundHistory = [];
     
     let difficulty = 'NORMAL';
     let maxError = 0.300;
@@ -155,7 +155,7 @@
         gameArea.classList.remove('hidden');
         currentRound = 1;
         totalError = 0;
-        roundHistory = []; // 履歴のリセット
+        roundHistory = [];
         initRound();
     }
     
@@ -208,15 +208,34 @@
         
         let scale = 200; 
         let pts = [];
+        
+        // 【裏技対策】正解の平面の向きを、ラウンド毎に完全にランダムな3D角度にクシャクシャにする
+        let rTheta = Math.random() * Math.PI * 2;
+        let rPhi = Math.random() * Math.PI * 2;
+        let rPsi = Math.random() * Math.PI * 2;
+        
         for(let i=0; i<numPoints; i++) {
             let p_x = u[i]*scale;
             let p_y = finalV[i]*scale;
             let p_z = w[i]*scale;
             
-            let pre_x = p_x * Math.cos(-psi) - p_y * Math.sin(-psi);
-            let pre_y = p_x * Math.sin(-psi) + p_y * Math.cos(-psi);
+            // 3次元のランダム回転行列の適用
+            // 1. Z軸回転
+            let x1 = p_x * Math.cos(rPsi) - p_y * Math.sin(rPsi);
+            let y1 = p_x * Math.sin(rPsi) + p_y * Math.cos(rPsi);
+            let z1 = p_z;
             
-            pts.push({ x: pre_x, y: pre_y, z: p_z });
+            // 2. X軸回転
+            let x2 = x1;
+            let y2 = y1 * Math.cos(rPhi) - z1 * Math.sin(rPhi);
+            let z2 = y1 * Math.sin(rPhi) + z1 * Math.cos(rPhi);
+            
+            // 3. Y軸回転
+            let x3 = x2 * Math.cos(rTheta) + z2 * Math.sin(rTheta);
+            let y3 = y2;
+            let z3 = -x2 * Math.sin(rTheta) + z2 * Math.cos(rTheta);
+            
+            pts.push({ x: x3, y: y3, z: z3 });
         }
         return pts;
     }
@@ -282,7 +301,6 @@
     }, {passive:true});
     window.addEventListener('touchend', handleDragEnd);
     
-    // 決定ボタン
     actionBtn.addEventListener('click', function() {
         if(gameState === 'playing') {
             let proj = getProjectedPoints();
@@ -290,7 +308,6 @@
             currentError = Math.abs(currentResultR - targetR);
             totalError += currentError;
             
-            // 今回のラウンドの結果を履歴に保存
             roundHistory.push({
                 round: currentRound,
                 target: targetR,
@@ -304,7 +321,6 @@
         }
     });
     
-    // 次へ / タイトルへ戻るボタン
     btnNext.addEventListener('click', function() {
         if(gameState === 'result') {
             if(currentRound < 3) {
@@ -433,7 +449,6 @@
             });
         }
         
-        // UIテキスト（共通）
         if (gameState !== 'gameover') {
             ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 18px "Helvetica Neue", Arial, sans-serif';
@@ -462,11 +477,9 @@
             ctx.font = 'bold 24px "Helvetica Neue", Arial, sans-serif';
             ctx.fillText(`ERROR: ${currentError.toFixed(3)}`, cx, 110);
         } else if (gameState === 'gameover') {
-            // 背景を暗く
             ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // リザルトタイトル
             ctx.textAlign = 'center';
             if (totalError <= maxError) {
                 ctx.fillStyle = '#00ffcc';
@@ -478,17 +491,14 @@
                 ctx.fillText("❌ GAME OVER... ❌", cx, cy - 140);
             }
             
-            // 累計スコア
             ctx.fillStyle = '#ffffff';
             ctx.font = 'bold 18px "Helvetica Neue", Arial, sans-serif';
             ctx.fillText(`最終累計誤差: ${totalError.toFixed(3)} / 許容: ${maxError.toFixed(3)}`, cx, cy - 90);
             
-            // 履歴テーブルの区切り線
             ctx.strokeStyle = 'rgba(255,255,255,0.2)';
             ctx.lineWidth = 1;
             ctx.beginPath(); ctx.moveTo(cx - 180, cy - 70); ctx.lineTo(cx + 180, cy - 70); ctx.stroke();
             
-            // 履歴テーブルヘッダー
             ctx.fillStyle = '#888888';
             ctx.font = 'bold 13px "Helvetica Neue", Arial, sans-serif';
             ctx.textAlign = 'left';   ctx.fillText("ROUND", cx - 170, cy - 45);
@@ -496,17 +506,14 @@
                                       ctx.fillText("RESULT", cx + 35, cy - 45);
                                       ctx.fillText("ERROR", cx + 125, cy - 45);
             
-            // 各ラウンドのデータ（数値を綺麗に並べるため等幅フォントを使用）
             ctx.font = 'bold 15px "Courier New", Courier, monospace';
             roundHistory.forEach((h, idx) => {
                 let yOffset = cy - 5 + idx * 35;
                 
-                // ラウンド名
                 ctx.fillStyle = '#ffffff';
                 ctx.textAlign = 'left';
                 ctx.fillText(` Rd ${h.round}`, cx - 170, yOffset);
                 
-                // 各種数値
                 ctx.textAlign = 'center';
                 ctx.fillStyle = '#ffcc00'; ctx.fillText(h.target.toFixed(3), cx - 55, yOffset);
                 ctx.fillStyle = '#00d5ff'; ctx.fillText(h.result.toFixed(3), cx + 35, yOffset);
