@@ -32,6 +32,7 @@
 
     #start-menu { text-align: center; padding: 20px 10px 30px; }
     
+    /* タイトルロゴ風 */
     .game-title {
       color: #fff;
       font-size: 32px;
@@ -87,14 +88,14 @@
     <p style="font-size: 13px; color: #ccc; margin-bottom: 20px;">
       目標の相関係数に合わせて<br>点群を回転させてください。
     </p>
-    <button class="diff-btn" data-diff="EASY" data-err="0.600" data-pts="30">
-      <strong>EASY</strong><br><span style="font-size:11px">許容誤差: 0.600 / 点数: 30</span>
+    <button class="diff-btn" data-diff="EASY" data-err="0.600">
+      <strong>EASY</strong><br><span style="font-size:11px">許容誤差: 0.600</span>
     </button>
-    <button class="diff-btn" data-diff="NORMAL" data-err="0.300" data-pts="20">
-      <strong>NORMAL</strong><br><span style="font-size:11px">許容誤差: 0.300 / 点数: 20</span>
+    <button class="diff-btn" data-diff="NORMAL" data-err="0.300">
+      <strong>NORMAL</strong><br><span style="font-size:11px">許容誤差: 0.300</span>
     </button>
-    <button class="diff-btn" data-diff="HARD" data-err="0.100" data-pts="15" style="margin-bottom:0;">
-      <strong>HARD</strong><br><span style="font-size:11px">許容誤差: 0.100 / 点数: 15 (Anomaly)</span>
+    <button class="diff-btn" data-diff="HARD" data-err="0.100" style="margin-bottom:0;">
+      <strong>HARD</strong><br><span style="font-size:11px">許容誤差: 0.100</span>
     </button>
   </div>
 
@@ -131,11 +132,12 @@
     
     let difficulty = 'NORMAL';
     let maxError = 0.300;
-    let pointCount = 20;
     let gameState = 'menu';
     
+    // プレイヤーの操作による回転角
     let theta = 0;
     let phi = 0;
+    // カメラの固定ひねり角
     const psi = Math.PI / 4;
     
     let isDragging = false;
@@ -146,7 +148,6 @@
         btn.addEventListener('click', function() {
             difficulty = this.getAttribute('data-diff');
             maxError = parseFloat(this.getAttribute('data-err'));
-            pointCount = parseInt(this.getAttribute('data-pts'));
             startGame();
         });
     });
@@ -164,18 +165,11 @@
         let baseR = (Math.random() + Math.random() + Math.random()) / 3;
         targetR = Math.round(baseR * 1000) / 1000;
         
-        let isSmiley = (difficulty === 'HARD' && Math.random() < 0.05);
+        points = generatePerfectCorrelationPoints(targetR);
         
-        let gen = generatePerfectCorrelationPoints(targetR, pointCount, isSmiley);
-        points = gen.points;
-        
-        // スマイルマークの場合は、実際の相関係数（ほぼ0.000）をターゲットとして上書き
-        if (isSmiley) {
-            targetR = parseFloat((gen.actualR).toFixed(3));
-        }
-        
-        theta = 0;
-        phi = 0;
+        // プレイヤーの初期視点をランダムにリセット
+        theta = (Math.random() - 0.5) * Math.PI * 2;
+        phi = (Math.random() - 0.5) * Math.PI * 2;
         
         actionBtn.classList.remove('hidden');
         btnNext.classList.add('hidden');
@@ -184,109 +178,86 @@
         gameState = 'playing';
     }
     
-    // 【対策B】必ず正解（誤差0.000）が存在するように逆算して点群を生成する
-    function generatePerfectCorrelationPoints(r, numPoints, isSmiley) {
-        let cx3 = [], cy3 = [], cz3 = [];
-        let actualR = r;
-
-        if (isSmiley) {
-            // 5%の確率でスマイルマークを生成（15点固定）
-            cx3 = [-25, 25]; // 両目
-            cy3 = [30, 30];
-            for (let i = 0; i < 13; i++) { // 口（U字型の放物線）
-                let px = -40 + (80 / 12) * i;
-                let py = -20 + (px * px) * 0.02;
-                cx3.push(px);
-                cy3.push(py);
-            }
-            for (let i = 0; i < 15; i++) {
-                cz3.push((Math.random() - 0.5) * 200); // 奥行きを完全に散らして隠す
-            }
-            
-            // スマイルの相関係数を計算（左右対称のためほぼ0になる）
-            let meanX = cx3.reduce((a,b)=>a+b)/15;
-            let meanY = cy3.reduce((a,b)=>a+b)/15;
-            let num=0, denX=0, denY=0;
-            for(let i=0; i<15; i++){
-                num += (cx3[i]-meanX)*(cy3[i]-meanY);
-                denX += (cx3[i]-meanX)**2;
-                denY += (cy3[i]-meanY)**2;
-            }
-            actualR = (denX===0 || denY===0) ? 0 : num/Math.sqrt(denX*denY);
-            
-        } else {
-            // 通常の相関データ生成（平面上で完璧な相関係数を作る）
-            let u = [], v = [], w = [];
-            for(let i=0; i<numPoints; i++) {
-                u.push(Math.random()*2-1);
-                v.push(Math.random()*2-1);
-                w.push(Math.random()*2-1);
-            }
-            
-            let meanU = u.reduce((a,b)=>a+b)/numPoints; u = u.map(x => x - meanU);
-            let normU = Math.sqrt(u.reduce((a,b)=>a+b*b,0)); u = u.map(x => x / (normU || 1));
-            
-            let meanV = v.reduce((a,b)=>a+b)/numPoints; v = v.map(x => x - meanV);
-            let dotUV = u.reduce((sum, val, i) => sum + val * v[i], 0); v = v.map((val, i) => val - dotUV * u[i]);
-            let normV = Math.sqrt(v.reduce((a,b)=>a+b*b,0)); v = v.map(x => x / (normV || 1));
-            
-            let meanW = w.reduce((a,b)=>a+b)/numPoints; w = w.map(x => x - meanW);
-            let normW = Math.sqrt(w.reduce((a,b)=>a+b*b,0)); w = w.map(x => x / (normW || 1));
-            
-            let coeff = Math.sqrt(1 - r*r);
-            for(let i=0; i<numPoints; i++) {
-                cx3.push(u[i] * 200);
-                cy3.push((r * u[i] + coeff * v[i]) * 200);
-                cz3.push(w[i] * 200); // 奥行きノイズ
-            }
+    function generatePerfectCorrelationPoints(r, numPoints = 15) {
+        let u = [], v = [], w = [];
+        for(let i=0; i<numPoints; i++) {
+            u.push(Math.random()*2-1);
+            v.push(Math.random()*2-1);
+            w.push(Math.random()*2-1);
         }
-
-        // 正解となるカメラ角度をランダムに決定
-        let target_theta = (Math.random() - 0.5) * Math.PI; 
-        let target_phi = (Math.random() - 0.5) * Math.PI;
         
-        // 初期状態(0,0)で答えが見えないようオフセット
-        if (Math.abs(target_theta) < 0.4) target_theta += (target_theta > 0 ? 0.4 : -0.4);
-        if (Math.abs(target_phi) < 0.4) target_phi += (target_phi > 0 ? 0.4 : -0.4);
-
+        // グラム・シュミットの直交化と正規化（完全な相関を作るための下準備）
+        let meanU = u.reduce((a,b)=>a+b)/numPoints;
+        u = u.map(x => x - meanU);
+        let normU = Math.sqrt(u.reduce((a,b)=>a+b*b,0));
+        u = u.map(x => x / (normU || 1));
+        
+        let meanV = v.reduce((a,b)=>a+b)/numPoints;
+        v = v.map(x => x - meanV);
+        let dotUV = u.reduce((sum, val, i) => sum + val * v[i], 0);
+        v = v.map((val, i) => val - dotUV * u[i]);
+        let normV = Math.sqrt(v.reduce((a,b)=>a+b*b,0));
+        v = v.map(x => x / (normV || 1));
+        
+        let meanW = w.reduce((a,b)=>a+b)/numPoints;
+        w = w.map(x => x - meanW);
+        let normW = Math.sqrt(w.reduce((a,b)=>a+b*b,0));
+        w = w.map(x => x / (normW || 1));
+        
+        let finalV = [];
+        let coeff = Math.sqrt(1 - r*r);
+        for(let i=0; i<numPoints; i++) {
+            finalV.push(r * u[i] + coeff * v[i]);
+        }
+        
+        let scale = 200; 
         let pts = [];
         
-        // 決定した正解角度から「逆算」して3D空間の初期座標を割り出す
-        for(let i=0; i<cx3.length; i++) {
-            let x3_ = cx3[i], y3_ = cy3[i], z3_ = cz3[i];
+        // 【逆算ロジック】正解となる「ターゲットのθとφ」をランダムに決定
+        let targetTheta = Math.random() * Math.PI * 2;
+        let targetPhi = Math.random() * Math.PI * 2;
+        
+        for(let i=0; i<numPoints; i++) {
+            // 2D平面(X, Y)上で完璧に相関が一致する座標をZ=ランダムで配置
+            let x3 = u[i] * scale;
+            let y3 = finalV[i] * scale;
+            let z3 = w[i] * scale;
             
-            // 1. Y軸回転の逆算 (-theta)
-            let x2_ = x3_ * Math.cos(target_theta) - z3_ * Math.sin(target_theta);
-            let z2_ = x3_ * Math.sin(target_theta) + z3_ * Math.cos(target_theta);
-            let y2_ = y3_;
+            // プレイヤーの操作の逆回転を施す
+            // 1. θの逆回転
+            let x2 = x3 * Math.cos(targetTheta) - z3 * Math.sin(targetTheta);
+            let y2 = y3;
+            let z2 = x3 * Math.sin(targetTheta) + z3 * Math.cos(targetTheta);
             
-            // 2. X軸回転の逆算 (-phi)
-            let y1_ = y2_ * Math.cos(target_phi) + z2_ * Math.sin(target_phi);
-            let z1_ = -y2_ * Math.sin(target_phi) + z2_ * Math.cos(target_phi);
-            let x1_ = x2_;
+            // 2. φの逆回転
+            let x1 = x2;
+            let y1 = y2 * Math.cos(targetPhi) + z2 * Math.sin(targetPhi);
+            let z1 = -y2 * Math.sin(targetPhi) + z2 * Math.cos(targetPhi);
             
-            // 3. Z軸回転の逆算 (-psi)
-            let p_x = x1_ * Math.cos(psi) + y1_ * Math.sin(psi);
-            let p_y = -x1_ * Math.sin(psi) + y1_ * Math.cos(psi);
-            let p_z = z1_;
+            // 3. ψ（カメラの固定ひねり角）の逆回転
+            let p_x = x1 * Math.cos(psi) + y1 * Math.sin(psi);
+            let p_y = -x1 * Math.sin(psi) + y1 * Math.cos(psi);
+            let p_z = z1;
             
             pts.push({ x: p_x, y: p_y, z: p_z });
         }
-        
-        return { points: pts, actualR: actualR };
+        return pts;
     }
     
     function getProjectedPoints() {
         let projected = [];
         for(let p of points) {
+            // 1. ψ（固定ひねり）
             let x1 = p.x * Math.cos(psi) - p.y * Math.sin(psi);
             let y1 = p.x * Math.sin(psi) + p.y * Math.cos(psi);
             let z1 = p.z;
             
+            // 2. φ（上下回転）
             let y2 = y1 * Math.cos(phi) - z1 * Math.sin(phi);
             let z2 = y1 * Math.sin(phi) + z1 * Math.cos(phi);
             let x2 = x1;
             
+            // 3. θ（左右回転）
             let x3 = x2 * Math.cos(theta) + z2 * Math.sin(theta);
             let z3 = -x2 * Math.sin(theta) + z2 * Math.cos(theta);
             let y3 = y2;
